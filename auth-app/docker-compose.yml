@@ -1,0 +1,69 @@
+services:
+  db:
+    image: postgres:16
+    container_name: auth_db
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: auth_app
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+
+  server:
+    build: ./server
+    container_name: auth_server
+    ports:
+      - "5000:5000"
+    environment:
+      PORT: 5000
+      JWT_SECRET: super_secret_change_me
+      JWT_EXPIRES_IN: 7d
+      CORS_ORIGIN: http://localhost:5173
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/auth_app
+    depends_on:
+      - db
+    volumes:
+      - ./server:/app
+      # - server_node_modules:/app/node_modules
+    # command: sh -lc "npm install && npx prisma generate && npx prisma db push && npm run dev"
+    # tty: true
+
+  quarkus:
+    build:
+      context: ./quarkus
+      dockerfile: Dockerfile
+    container_name: auth_quarkus
+    depends_on:
+      - db
+    ports:
+      - "8080:8080"
+    environment:
+      QUARKUS_HTTP_PORT: "8080"
+      QUARKUS_HTTP_HOST: "0.0.0.0"
+      QUARKUS_DATASOURCE_JDBC_URL: jdbc:postgresql://db:5432/auth_app
+      QUARKUS_DATASOURCE_USERNAME: postgres
+      QUARKUS_DATASOURCE_PASSWORD: postgres
+
+  client:
+    build: ./client
+    container_name: auth_client
+    ports:
+      - "5173:5173"
+    environment:
+      # Switch API target here:
+      # VITE_API_URL: http://localhost:5000
+      VITE_API_URL: http://localhost:8080
+    depends_on:
+      - quarkus
+      - server
+    volumes:
+      - ./client:/app
+      - client_node_modules:/app/node_modules
+
+volumes:
+  pg_data:
+  server_node_modules:
+  client_node_modules:
